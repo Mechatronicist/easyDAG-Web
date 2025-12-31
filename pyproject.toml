@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "EasyDAGWeb"
+name = "EasyDAG-Web"
 version = "0.1.0"
-description = "A small EasyDAG extension with predefined websocket setup for FastAPI usage."
+description = "A small EasyDAG extension with predefined websocket setup for API usage."
 readme = "README.md"
 requires-python = ">=3.9"
 
@@ -21,6 +21,6 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mechatronicist/EasyDAG"
-Repository = "https://github.com/mechatronicist/EasyDAG"
-Issues = "https://github.com/mechatronicist/EasyDAG/issues"
+Homepage = "https://github.com/mechatronicist/EasyDAG-Web"
+Repository = "https://github.com/mechatronicist/EasyDAG-Web"
+Issues = "https://github.com/mechatronicist/EasyDAG-Web/issues"

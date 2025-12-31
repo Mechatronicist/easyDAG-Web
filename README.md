@@ -1,28 +1,38 @@
-# EasyDAG
+# EasyDAG Web
 
-**EasyDAG** is a lightweight, multiprocessing-friendly Directed Acyclic Graph (DAG) execution engine for Python.
+**EasyDAG Web** is an optional companion package for **EasyDAG** that adds real-time event streaming, WebSocket integration, and browser-based monitoring.
 
-It lets you define task nodes, declare dependencies, and execute them in parallel — while emitting structured lifecycle events and inter-process messages for logging, progress reporting, or external systems such as web dashboards.
-
-EasyDAG is designed to be **simple, explicit, and embeddable**, without the operational overhead of workflow schedulers.
+It provides a lightweight event bus and emitter system designed to sit **on top of EasyDAG’s interface API**, enabling live DAG visualization, control, and external integrations.
 
 ---
 
-## Key Features
+## What This Package Is
 
-* ⚙️ Define DAGs using plain Python functions
-* ⚡ Parallel execution via `multiprocessing`
-* 🧠 Automatic dependency resolution
-* 📬 Multiprocess-safe message queue for side effects
-* 🧵 Message handlers run safely in the main process
-* 🪝 Lifecycle hooks via a clean interface (ABC)
-* 🛑 Cancellation, fail-fast, and timeout support
-* 🌐 Optional WebSocket interface for live monitoring & control
-* 📦 No external runtime dependencies for the core engine
+EasyDAG Web is:
+
+* 🌐 A WebSocket-friendly event layer for EasyDAG
+* 📡 A publish/subscribe event bus
+* 🧩 A clean adapter between EasyDAG and web UIs
+* 🖥 A reference implementation for live DAG monitoring
+
+---
+
+## What This Package Is *Not*
+
+* ❌ Not a DAG engine (that’s EasyDAG)
+* ❌ Not required to use EasyDAG
+* ❌ Not tied to any frontend framework
+* ❌ Not a scheduler or persistence layer
 
 ---
 
 ## Installation
+
+```bash
+pip install easydag-web
+```
+
+You must also install the core engine:
 
 ```bash
 pip install easydag
@@ -30,185 +40,114 @@ pip install easydag
 
 ---
 
-## Quick Start
+## Package Overview
+
+This package provides:
+
+* **DagEventBus**
+  A simple async-safe event bus supporting multiple subscribers.
+
+* **DagEventEmitter**
+  A convenience wrapper for emitting structured DAG and node events.
+
+* **WebSocketManager**
+  A helper for broadcasting events to connected WebSocket clients.
+
+---
+
+## Example
+
+**Full Web Demo:** \
+A complete FastAPI + WebSocket example is available on GitHub, showing:
+  * DAG execution
+  * Live event streaming
+  * Run / cancel controls
+  * Browser-based monitoring
+
+---
+
+## Basic Usage
+
+### Create an Event Bus and Emitter
 
 ```python
-from EasyDAG import EasyDAG, DAGNode
+from EasyDAGWeb import DagEventBus, DagEventEmitter
 
-def task_a():
-    return 2
-
-def task_b(x):
-    return x * 10
-
-dag = EasyDAG(processes=4)
-
-dag.add_node(DAGNode("A", task_a))
-dag.add_node(DAGNode("B", task_b))
-
-dag.add_edge("A", "B")
-
-outputs = dag.run()
-print(outputs)
+bus = DagEventBus()
+emitter = DagEventEmitter(bus)
 ```
 
 ---
 
-## Core Concepts
-
-### DAG
-
-A **DAG** is a set of nodes with directed dependencies. A node may only execute once all of its dependencies have completed successfully.
-
-EasyDAG guarantees:
-
-* No node runs before its dependencies
-* Each node runs at most once (unless retried)
-* Independent nodes run in parallel
-
----
-
-### DAGNode
-
-Each node wraps:
-
-* A callable function
-* Positional and keyword arguments
-* Retry configuration (optional)
-
-```python
-DAGNode(
-    node_id="A",
-    func=process_data,
-    args=(10,),
-    kwargs={"foo": "bar"},
-    max_retries=2
-)
-```
-
-Dependencies are resolved automatically by matching upstream node IDs to function parameters.
-
----
-
-## Message Queue System (Side Effects)
-
-EasyDAG includes an optional **multiprocessing-safe message queue** designed for side effects:
-
-* Logging
-* Progress updates
-* Metrics
-* Database writes
-* External notifications
-
-This keeps compute nodes pure and avoids unsafe shared state.
-
----
-
-### Defining a Queue
-
-```python
-from EasyDAG import MultiprocessQueue
-
-queue = MultiprocessQueue()
-dag = EasyDAG(processes=4, mp_queue=queue)
-```
-
----
-
-### Registering Handlers (Main Process)
-
-Handlers always run in the **main process**, never in workers.
-
-```python
-def log_progress(payload):
-    print("Progress:", payload)
-
-queue.register_message_handler("progress", log_progress)
-```
-
----
-
-### Sending Messages from Nodes
-
-If a node function includes the reserved `message_queue` parameter, EasyDAG injects it automatically.
-
-```python
-def process_data(x, message_queue=None):
-    message_queue.put(
-        QueueMessage("progress", {"value": x})
-    )
-    return x * 2
-```
-
-If the parameter is omitted, the queue is not passed.
-
----
-
-## Lifecycle Interface (Execution Hooks)
-
-EasyDAG exposes a formal **interface abstraction** via an abstract base class:
+### Attach an Interface to EasyDAG
 
 ```python
 from EasyDAG import EasyInterface
+
+class MyInterface(EasyInterface):
+    def __init__(self, dag, emitter):
+        self.emitter = emitter
+        super().__init__(dag)
+
+    def dag_started(self, dag_id, metadata=None):
+        self.emitter.emit({
+            "type": "dag_started",
+            "dagId": dag_id,
+        })
+
+    def node_finished(self, node_id, metadata=None):
+        self.emitter.node_finished(node_id)
 ```
 
-This allows you to observe and control execution without coupling logic to the engine.
-
-### Supported Hooks
-
-* `dag_started`
-* `dag_finished`
-* `node_started`
-* `node_progress`
-* `node_finished`
-* `node_errored`
-* `cancel()`
-
-You can implement your own interface to:
-
-* Emit events
-* Drive UIs
-* Collect metrics
-* Integrate APIs
+This keeps your DAG logic and your presentation layer completely separate.
 
 ---
 
-## Cancellation & Fail-Fast
+## WebSocket Integration (FastAPI)
 
-EasyDAG supports:
+```python
+from fastapi import FastAPI, WebSocket
+from EasyDAGWeb import DagEventBus
 
-* **User-initiated cancellation**
-* **Fail-fast execution**
-* **Execution timeouts**
+app = FastAPI()
+bus = DagEventBus()
 
-Cancellation halts scheduling of new nodes and can be configured to terminate or safely complete in-flight tasks.
+@app.websocket("/ws/dag")
+async def dag_ws(ws: WebSocket):
+    await ws.accept()
 
-Execution outcome is tracked explicitly via DAG status (success, failed, cancelled, timeout).
+    async def sender(event):
+        await ws.send_json(event)
 
----
+    bus.register_sender(sender)
+    try:
+        while True:
+            await ws.receive_json()
+    finally:
+        bus.unregister_sender(sender)
+```
 
-## WebSocket + FastAPI Demo
-
-A full working example is included:
-
-📁 `examples/full_web_demo/server.py`
-
-### What the demo shows
-
-* Building a DAG
-* Emitting node & DAG lifecycle events
-* Streaming events over WebSockets
-* Starting and cancelling execution from the browser
-* Viewing live progress in real time
+Any event emitted on the bus is broadcast to all connected clients.
 
 ---
 
-### Running the Demo
+## Full Web Demo
 
-From the project root:
+This package includes a complete working example:
+
+```
+examples/
+└── full_web_demo/
+    ├── dag.py
+    ├── index.html
+    ├── interface.py
+    └── server.py
+```
+
+### Run the demo
 
 ```bash
-uvicorn example.server:app --reload
+uvicorn examples.full_web_demo.server:app --reload
 ```
 
 Open:
@@ -217,30 +156,23 @@ Open:
 http://localhost:8000
 ```
 
+### Demo Features
+
+* Run / cancel DAG execution
+* Live DAG lifecycle events
+* Node progress and completion events
+* WebSocket-driven control
+* Browser console or UI-based monitoring
+* Designed to pair with Vue Flow or similar libraries
+
 ---
 
-### Demo UI Features
+## Intended Use Cases
 
-* ▶️ Run DAG button
-* ⏹ Cancel DAG button
-* Live event stream
-* WebSocket-driven execution control
-* Browser-based monitoring
+EasyDAG Web is ideal when you want to:
 
----
-
-## When to Use EasyDAG
-
-EasyDAG is ideal when you need:
-
-* A **local, Python-native DAG engine**
-* Parallel execution with dependencies
-* Fine-grained control over execution
-* Lightweight orchestration without infrastructure
-* A simpler alternative to:
-
-  * Airflow
-  * Prefect
-  * Ray
-  * Dask
-
+* Visualize DAG execution in real time
+* Control DAG runs from a UI
+* Stream DAG events to external systems
+* Build dashboards or monitoring tools
+* Integrate EasyDAG into web services
