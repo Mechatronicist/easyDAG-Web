@@ -3,7 +3,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 
 from EasyDAG import EasyDAG, MultiprocessQueue, DAGNode
-from src.webSetup import DagEventBus, DagEventEmitter
+from src.EasyDAG_Web import DagEventBus, DagEventEmitter
 
 from .dag import simple_process, process_data, aggregate
 from .interface import WebInterface
