@@ -17,7 +17,7 @@ license = {file = "LICENSE"}
 keywords = ["dag", "multiprocessing", "workflow", "parallel", "tasks", "web", "api"]
 
 dependencies = [
-    "EasyDAG"
+    "EasyDAG>=0.2.0"
 ]
 
 [project.urls]
